@@ -1,0 +1,208 @@
+# PIPELINE DEFINITION
+# Name: mlops-iris-end-to-end-pipeline
+# Description: Automated Pipeline: Data Preprocessing, Model Training, and Evaluation
+components:
+  comp-evaluate-model-component:
+    executorLabel: exec-evaluate-model-component
+    inputDefinitions:
+      artifacts:
+        data_input:
+          artifactType:
+            schemaTitle: system.Artifact
+            schemaVersion: 0.0.1
+        model_input:
+          artifactType:
+            schemaTitle: system.Model
+            schemaVersion: 0.0.1
+    outputDefinitions:
+      artifacts:
+        metrics_output:
+          artifactType:
+            schemaTitle: system.Metrics
+            schemaVersion: 0.0.1
+  comp-load-data-component:
+    executorLabel: exec-load-data-component
+    inputDefinitions:
+      parameters:
+        dataset_name:
+          parameterType: STRING
+    outputDefinitions:
+      artifacts:
+        data_output:
+          artifactType:
+            schemaTitle: system.Artifact
+            schemaVersion: 0.0.1
+  comp-train-model-component:
+    executorLabel: exec-train-model-component
+    inputDefinitions:
+      artifacts:
+        data_input:
+          artifactType:
+            schemaTitle: system.Artifact
+            schemaVersion: 0.0.1
+    outputDefinitions:
+      artifacts:
+        model_output:
+          artifactType:
+            schemaTitle: system.Model
+            schemaVersion: 0.0.1
+deploymentSpec:
+  executors:
+    exec-evaluate-model-component:
+      container:
+        args:
+        - --executor_input
+        - '{{$}}'
+        - --function_to_execute
+        - evaluate_model_component
+        command:
+        - sh
+        - -c
+        - "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip ||\
+          \ python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1\
+          \ python3 -m pip install --quiet --no-warn-script-location 'kfp==2.16.1'\
+          \ '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"' && \"\
+          $0\" \"$@\"\n"
+        - sh
+        - -ec
+        - 'program_path=$(mktemp -d)
+
+
+          printf "%s" "$0" > "$program_path/ephemeral_component.py"
+
+          _KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         "$program_path/ephemeral_component.py"                         "$@"
+
+          '
+        - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
+          \ *\n\ndef evaluate_model_component(data_input: Artifact, model_input: Model,\
+          \ metrics_output: Output[Metrics]):\n    import json\n    import pickle\n\
+          \n    with open(data_input.path, 'r') as f:\n        dataset = json.load(f)\n\
+          \    X = dataset[\"data\"]\n    y = dataset[\"target\"]\n\n    with open(model_input.path,\
+          \ 'rb') as f:\n        model = pickle.load(f)\n\n    accuracy = model.score(X,\
+          \ y)\n    metrics_output.log_metric('accuracy', float(accuracy))\n    print(f\"\
+          Component C: Evaluation Complete. Test Accuracy: {accuracy}\")\n\n"
+        image: python:3.9
+    exec-load-data-component:
+      container:
+        args:
+        - --executor_input
+        - '{{$}}'
+        - --function_to_execute
+        - load_data_component
+        command:
+        - sh
+        - -c
+        - "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip ||\
+          \ python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1\
+          \ python3 -m pip install --quiet --no-warn-script-location 'kfp==2.16.1'\
+          \ '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"' && \"\
+          $0\" \"$@\"\n"
+        - sh
+        - -ec
+        - 'program_path=$(mktemp -d)
+
+
+          printf "%s" "$0" > "$program_path/ephemeral_component.py"
+
+          _KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         "$program_path/ephemeral_component.py"                         "$@"
+
+          '
+        - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
+          \ *\n\ndef load_data_component(dataset_name: str, data_output: Output[Artifact]):\n\
+          \    from sklearn.datasets import load_iris\n    import json\n\n    iris\
+          \ = load_iris()\n    dataset = {\n        \"data\": iris.data.tolist(),\n\
+          \        \"target\": iris.target.tolist(),\n        \"feature_names\": iris.feature_names\n\
+          \    }\n    with open(data_output.path, 'w') as f:\n        json.dump(dataset,\
+          \ f)\n    print(\"Component A: Data Loaded and Preprocessed successfully.\"\
+          )\n\n"
+        image: python:3.9
+    exec-train-model-component:
+      container:
+        args:
+        - --executor_input
+        - '{{$}}'
+        - --function_to_execute
+        - train_model_component
+        command:
+        - sh
+        - -c
+        - "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip ||\
+          \ python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1\
+          \ python3 -m pip install --quiet --no-warn-script-location 'kfp==2.16.1'\
+          \ '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"' && \"\
+          $0\" \"$@\"\n"
+        - sh
+        - -ec
+        - 'program_path=$(mktemp -d)
+
+
+          printf "%s" "$0" > "$program_path/ephemeral_component.py"
+
+          _KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         "$program_path/ephemeral_component.py"                         "$@"
+
+          '
+        - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
+          \ *\n\ndef train_model_component(data_input: Artifact, model_output: Output[Model]):\n\
+          \    import json\n    import pickle\n    from sklearn.ensemble import RandomForestClassifier\n\
+          \n    with open(data_input.path, 'r') as f:\n        dataset = json.load(f)\n\
+          \n    X = dataset[\"data\"]\n    y = dataset[\"target\"]\n\n    model =\
+          \ RandomForestClassifier(n_estimators=100, random_state=42)\n    model.fit(X,\
+          \ y)\n\n    with open(model_output.path, 'wb') as f:\n        pickle.dump(model,\
+          \ f)\n    print(\"Component B: Random Forest Model Trained and Saved.\"\
+          )\n\n"
+        image: python:3.9
+pipelineInfo:
+  description: 'Automated Pipeline: Data Preprocessing, Model Training, and Evaluation'
+  name: mlops-iris-end-to-end-pipeline
+root:
+  dag:
+    tasks:
+      evaluate-model-component:
+        cachingOptions:
+          enableCache: true
+        componentRef:
+          name: comp-evaluate-model-component
+        dependentTasks:
+        - load-data-component
+        - train-model-component
+        inputs:
+          artifacts:
+            data_input:
+              taskOutputArtifact:
+                outputArtifactKey: data_output
+                producerTask: load-data-component
+            model_input:
+              taskOutputArtifact:
+                outputArtifactKey: model_output
+                producerTask: train-model-component
+        taskInfo:
+          name: evaluate-model-component
+      load-data-component:
+        cachingOptions:
+          enableCache: true
+        componentRef:
+          name: comp-load-data-component
+        inputs:
+          parameters:
+            dataset_name:
+              runtimeValue:
+                constant: iris
+        taskInfo:
+          name: load-data-component
+      train-model-component:
+        cachingOptions:
+          enableCache: true
+        componentRef:
+          name: comp-train-model-component
+        dependentTasks:
+        - load-data-component
+        inputs:
+          artifacts:
+            data_input:
+              taskOutputArtifact:
+                outputArtifactKey: data_output
+                producerTask: load-data-component
+        taskInfo:
+          name: train-model-component
+schemaVersion: 2.1.0
+sdkVersion: kfp-2.16.1
